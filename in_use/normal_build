@@ -1,0 +1,142 @@
+//workspace need: fio_base_test/c_readwrite.ini
+//description: steps: make, insmod, (fio, detach), detach, attach, format, rmmod
+pipeline{
+	agent {
+		node {
+			label 'master'
+			customWorkspace "${JENKINS_HOME}/custom_workspace/${JOB_NAME}"
+		}
+	}
+	//triggers {
+	//	cron('10 21 * * *')
+	//}
+	environment {
+		PATH="$PATH:/usr/local/bin"
+		workspace="${JENKINS_HOME}/workspace/${JOB_NAME}"
+	}
+	parameters {
+		string(name: 'something', defaultValue: "${JENKINS_HOME}/workspace/${JOB_NAME}", description: 'absolute workspace')
+	}
+	stages {
+		stage('preprocess git') {
+			failFast true
+			parallel {
+				stage('git driver') {
+					steps {
+						dir("linux_shannon") {
+							git branch: 'rc', url: 'git://www.shannon-data.com/linux.git'
+						}
+					}
+				}
+				stage('git utils') {
+					steps {
+						dir("shannon_utils") {
+							git branch: 'rc', url: 'git://www.shannon-data.com/shannon-utils.git'
+						}
+					}
+				}
+			}
+		}
+		stage('insmod, make utils') {
+			steps {
+				dir("linux_shannon/drivers/block/shannon") {
+					sh '''
+					make
+					rmmod shannon || echo > /dev/null
+					insmod shannon.ko || echo > /dev/null
+					lsblk
+					exit 0
+					'''
+				}
+				dir("shannon_utils") {
+					sh '''
+					make
+					exit 0
+					'''
+				}
+			}
+		}
+		stage('fio and detach') {
+			failFast false
+			parallel {
+				stage('fio') {
+					options {
+						timeout(time: 15, unit: 'SECONDS')
+					}
+					steps {
+						dir("fio_base_test") {
+							sh returnStatus: true, script: '''
+							fio c_readwrite.ini
+							exit 0
+							'''
+						}
+					}
+				}
+				stage('detach failed') {
+					steps {
+						dir("shannon_utils") {
+							sh '''
+							sleep 10
+							./shannon-detach /dev/scta || echo > /dev/null
+							exit 0
+							'''
+						}
+					}
+				}
+			}
+		}
+		stage('detach success') {
+			steps {
+				dir("shannon_utils") {
+					sh '''
+					sleep 10
+					./shannon-detach /dev/scta
+					'''
+				}
+			}
+		}
+		stage('attach') {
+			steps {
+				dir("shannon_utils") {
+					sh '''
+					./shannon-attach /dev/scta
+					'''
+				}
+			}
+		}
+		stage('format') {
+			steps {
+				dir("shannon_utils") {
+					sh '''
+					./shannon-detach /dev/scta
+					./shannon-format /dev/scta <<eof
+y
+eof
+					'''
+				}
+			}
+		}
+		stage('rmmod') {
+			steps {
+				sh '''
+				rmmod shannon
+				'''
+			}
+		}
+	}
+	post {
+		always {
+			emailext attachLog: '',
+			attachmentsPattern: '',
+			from: 'jenkins@group1',
+			to: 'guanhong@shannon-data.com',
+			subject: 'test project: ${PROJECT_NAME}, build over, status: ${BUILD_STATUS}',
+			body: '''
+descriptions
+${JOB_DESCRIPTION}
+-----
+${DEFAULT_CONTENT}
+'''
+		}
+	}
+}

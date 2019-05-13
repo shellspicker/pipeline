@@ -1,0 +1,38 @@
+pipeline {
+	agent any
+	parameters {
+		//all variable type
+		string(name: 'person', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
+		text(name: 'biography', defaultValue: '', description: 'Enter some information about the person')
+		booleanParam(name: 'toggle', defaultValue: true, description: 'Toggle this value')
+		choice(name: 'choice', choices: ['One', 'Two', 'Three'], description: 'Pick something')
+		password(name: 'password', defaultValue: 'SECRET', description: 'Enter a password')
+		file(name: "file", description: "Choose a file to upload")
+
+		string(name: 'workspace', defaultValue: "${JENKINS_HOME}/ttttt", description: 'absolute workspace')
+	}
+	environment {
+		PATH="$PATH:/usr/local/bin"
+		WORKSPACE="${JENKINS_HOME}/workspace/${JOB_NAME}"
+	}
+	stages {
+		stage('Example') {
+			steps {
+				//parameters can be only used to pipeline builtin function, not in shell script
+				//sh '''
+				//echo "Hello ${params.person}"
+				//echo "Biography: ${params.biography}"
+				//echo "Toggle: ${params.toggle}"
+				//echo "Choice: ${params.choice}"
+				//echo "Password: ${params.password}"
+				//'''
+
+				//environment can be used in anywhere
+				dir("${params.workspace}") {
+					sh 'pwd'
+					sh 'echo $WORKSPACE'
+				}
+			}
+		}
+	}
+}

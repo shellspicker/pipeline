@@ -1,0 +1,120 @@
+//fio version must > 2.2.8，thus we can use option: per_job_logs, it will not span log with jobs num, just 1 log which name is fixed.
+//base fio test, steps: write, read, randwrite, randread, last will show consistency.
+//this projet need gnuplot script, fio_base_test config.
+//to change each fio test time, update it in script manually.
+pipeline{
+	agent {
+		node {
+			label 'master'
+			customWorkspace "${JENKINS_HOME}/custom_workspace/${JOB_NAME}"
+		}
+	}
+	triggers {
+		cron('0 0 * * *')
+	}
+	environment {
+		PATH="$PATH:/usr/local/bin"
+		workspace="${JENKINS_HOME}/workspace/${JOB_NAME}"
+		time_read=600
+		time_write=600
+		time_randread=600
+		time_randwrite=600
+	}
+	parameters {
+		string(name: 'something', defaultValue: "${JENKINS_HOME}/workspace/${JOB_NAME}", description: 'default runtime workspace, truly workspace is customWorkspace.')
+	}
+	stages {
+		stage('preprocess git') {
+			failFast true
+			parallel {
+				stage('git driver') {
+					steps {
+						dir("linux_shannon") {
+							git branch: 'rc', url: 'git://www.shannon-data.com/linux.git'
+						}
+					}
+				}
+				stage('git utils') {
+					steps {
+						dir("shannon_utils") {
+							git branch: 'rc', url: 'git://www.shannon-data.com/shannon-utils.git'
+						}
+					}
+				}
+			}
+		}
+		stage('insmod, make utils') {
+			steps {
+				dir("linux_shannon/drivers/block/shannon") {
+					sh '''
+					make
+					rmmod shannon || echo > /dev/null
+					insmod shannon.ko || echo > /dev/null
+					lsblk
+					exit 0
+					'''
+				}
+				dir("shannon_utils") {
+					sh '''
+					make
+					make install
+					exit 0
+					'''
+				}
+			}
+		}
+		stage("base fio test") {
+			steps {
+				dir("fio_base_test") {
+					sh '''
+					fio c_write.ini --runtime=$time_write --write_bw_log=../gen_fio_log/write
+					fio c_read.ini --runtime=$time_read --write_bw_log=../gen_fio_log/read
+					fio c_randwrite.ini --runtime=$time_randwrite --write_bw_log=../gen_fio_log/randwrite
+					fio c_randread.ini --runtime=$time_randread --write_bw_log=../gen_fio_log/randread
+					'''
+				}
+			}
+		}
+		stage("check log") {
+			steps {
+				dir("gnuplot") {
+					sh '''
+					logdir="../gen_fio_log"
+					./main.sh $logdir/write_bw.log $logdir/write.png > $logdir/c_write
+					./main.sh $logdir/read_bw.log $logdir/read.png > $logdir/c_read
+					./main.sh $logdir/randwrite_bw.log $logdir/randwrite.png > $logdir/c_randwrite
+					./main.sh $logdir/randread_bw.log $logdir/randread.png > $logdir/c_randread
+					'''
+				}
+			}
+		}
+	}
+	post {
+		always {
+			emailext attachLog: '',
+			attachmentsPattern: 'gen_fio_log/write.png, gen_fio_log/read.png, gen_fio_log/randwrite.png, gen_fio_log/randread.png',
+			from: 'jenkins@group1',
+			to: 'shannon_pdev_group1@shannon-sys.com stanley.miao@shannon-sys.com',
+			subject: 'test project: ${PROJECT_NAME}, build over, status: ${BUILD_STATUS}',
+			body: '''
+descriptions
+${JOB_DESCRIPTION}
+-----
+${DEFAULT_CONTENT}
+-----
+consistency status:
+${FILE,path="gen_fio_log/c_write"}
+${FILE,path="gen_fio_log/c_read"}
+${FILE,path="gen_fio_log/c_randwrite"}
+${FILE,path="gen_fio_log/c_randread"}
+'''
+			dir("gen_fio_log") {
+				sh '''
+				rm -rf *.log
+				rm -rf c*
+				rm -rf *.png
+				'''
+			}
+		}
+	}
+}

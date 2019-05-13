@@ -1,0 +1,41 @@
+pipeline{
+	agent {
+		node {
+			label 'master'
+			customWorkspace "${JENKINS_HOME}/custom_workspace/${JOB_NAME}"
+		}
+	}
+	triggers {
+		cron('0 0 * * *')
+	}
+	environment {
+		PATH="$PATH:/usr/local/bin"
+		workspace="${JENKINS_HOME}/workspace/${JOB_NAME}"
+	}
+	parameters {
+		string(name: 'something', defaultValue: "${JENKINS_HOME}/workspace/${JOB_NAME}", description: 'default runtime workspace, truly workspace is customWorkspace.')
+	}
+	stages {
+		stage('') {
+			steps {
+				dir("<yourdir>") {
+				}
+			}
+		}
+	}
+	post {
+		always {
+			emailext attachLog: '',
+			attachmentsPattern: '',
+			from: 'jenkins@group1',
+			to: 'guanhong@shannon-data.com',
+			subject: 'test project: ${PROJECT_NAME}, build over, status: ${BUILD_STATUS}',
+			body: '''
+descriptions
+${JOB_DESCRIPTION}
+-----
+${DEFAULT_CONTENT}
+'''
+		}
+	}
+}
