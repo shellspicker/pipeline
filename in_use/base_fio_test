@@ -80,10 +80,10 @@ pipeline{
 				dir("gnuplot") {
 					sh '''
 					logdir="../gen_fio_log"
-					./main.sh $logdir/write_bw.log $logdir/write.png > $logdir/c_write
-					./main.sh $logdir/read_bw.log $logdir/read.png > $logdir/c_read
-					./main.sh $logdir/randwrite_bw.log $logdir/randwrite.png > $logdir/c_randwrite
-					./main.sh $logdir/randread_bw.log $logdir/randread.png > $logdir/c_randread
+					./main.sh $logdir/write_bw.log $logdir/write.png write > $logdir/c_write
+					./main.sh $logdir/read_bw.log $logdir/read.png read > $logdir/c_read
+					./main.sh $logdir/randwrite_bw.log $logdir/randwrite.png randwrite > $logdir/c_randwrite
+					./main.sh $logdir/randread_bw.log $logdir/randread.png randread > $logdir/c_randread
 					'''
 				}
 			}
