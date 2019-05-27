@@ -6,7 +6,7 @@ pipeline{
 	agent {
 		node {
 			label 'master'
-			customWorkspace "${JENKINS_HOME}/custom_workspace/${JOB_NAME}"
+			customWorkspace "${JENKINS_HOME}/custom_workspace/base_fio_test"
 		}
 	}
 	triggers {
